@@ -1,4 +1,4 @@
-const axios = require('axios');
+const puppeteer = require('puppeteer');
 const cheerio = require('cheerio');
 const jobStore = require('../services/jobStore');
 const aggregate = require('./aggregator');
@@ -8,11 +8,26 @@ async function processDomains(jobId, domains) {
   if (!job) return;
 
   job.status = 'running';
+  job.progress = 0;
+  jobStore.set(jobId, job);
+  
+  let browser = null;
+  try {
+    browser = await puppeteer.launch({
+      headless: 'new',
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+    });
+  } catch(e) {
+    console.error("Failed to launch puppeteer", e);
+    job.status = 'error';
+    jobStore.set(jobId, job);
+    return;
+  }
   
   const results = [];
   for (let i = 0; i < domains.length; i++) {
     const domain = domains[i];
-    const report = await analyzeDomain(domain);
+    const report = await analyzeDomain(domain, browser);
     results.push(report);
     
     // Update progress
@@ -20,12 +35,16 @@ async function processDomains(jobId, domains) {
     jobStore.set(jobId, job);
   }
 
+  if (browser) {
+    await browser.close();
+  }
+
   job.status = 'complete';
   job.results = results;
   jobStore.set(jobId, job);
 }
 
-async function analyzeDomain(domainStr) {
+async function analyzeDomain(domainStr, browser) {
   let domain = domainStr.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
   
   let hreflangs = new Set();
@@ -42,18 +61,14 @@ async function analyzeDomain(domainStr) {
     'polish': 'pl', 'turkish': 'tr', 'english': 'en'
   };
 
-  const browserHeaders = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.9',
-    'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-    'Sec-Ch-Ua-Mobile': '?0',
-    'Sec-Ch-Ua-Platform': '"Windows"',
-    'Sec-Fetch-Dest': 'document',
-    'Sec-Fetch-Mode': 'navigate',
-    'Sec-Fetch-Site': 'none',
-    'Upgrade-Insecure-Requests': '1'
-  };
+  let page;
+  try {
+    page = await browser.newPage();
+    await page.setExtraHTTPHeaders({ 'Accept-Language': 'en-US,en;q=0.9' });
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+  } catch (e) {
+    return aggregate(domain, [], 500);
+  }
 
   while (queue.length > 0 && visited.size < maxPages) {
     let url = queue.shift();
@@ -61,17 +76,19 @@ async function analyzeDomain(domainStr) {
     visited.add(url);
     
     try {
-      const response = await axios.get(url, { 
-        timeout: 5000,
-        headers: browserHeaders,
-        maxRedirects: 5
-      });
-      
-      if (!domainStatus) {
-         domainStatus = response.status;
+      let response = null;
+      try {
+        response = await page.goto(url, { waitUntil: 'networkidle2', timeout: 15000 });
+      } catch (timeoutErr) {
+        console.warn(`[Warn] timeout or error navigating to ${url}, attempting to extract content anyway.`);
       }
       
-      const $ = cheerio.load(response.data);
+      if (!domainStatus && response) {
+         domainStatus = response.status();
+      }
+      
+      const html = await page.content();
+      const $ = cheerio.load(html);
       
       let htmlLang = $('html').attr('lang');
       if (htmlLang) {
@@ -123,14 +140,16 @@ async function analyzeDomain(domainStr) {
           visited.delete(url);
        } else {
           if (!domainStatus) {
-             domainStatus = error.response ? error.response.status : (error.code === 'ECONNABORTED' ? 408 : 500);
+             domainStatus = 500;
           }
           console.error(`Failed to fetch ${url}:`, error.message);
        }
     }
   }
 
-  return aggregate(domain, Array.from(hreflangs), domainStatus || 500);
+  await page.close().catch(() => {});
+
+  return aggregate(domain, Array.from(hreflangs), domainStatus || (visited.size > 0 ? 200 : 500));
 }
 
 module.exports = { processDomains, analyzeDomain };

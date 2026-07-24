@@ -79,6 +79,8 @@ function App() {
         setJobId(data.jobId);
         setJobStatus('queued');
         setJobProgress(0);
+        setJobCurrent(0);
+        setJobTotal(0);
         setResults([]);
       } else {
         setErrorMsg(data.error || 'Failed to start job');
@@ -120,7 +122,7 @@ function App() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', 'language_finder_summary.csv');
+    link.setAttribute('download', 'leximeter_summary.csv');
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -128,72 +130,104 @@ function App() {
   };
 
   return (
-    <div className="glass-container">
-      <h1>Language Finder</h1>
-      <p className="subtitle">Discover published languages across your domains instantly.</p>
-      
-      {errorMsg && (
-        <div style={{ color: 'var(--error)', marginBottom: '1rem', textAlign: 'center', background: 'rgba(239,68,68,0.1)', padding: '0.5rem', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.3)' }}>
-          {errorMsg}
-        </div>
-      )}
-
-      {jobStatus === 'idle' && (
-        <div className="state-ready">
-          <textarea 
-            placeholder="Paste domains here... (one per line)&#10;example.com&#10;gymshark.com"
-            value={domainsInput}
-            onChange={(e) => setDomainsInput(e.target.value)}
-          />
-          <button className="btn" onClick={handleStartAnalysis}>Run Analysis</button>
-        </div>
-      )}
-
-      {(jobStatus === 'queued' || jobStatus === 'running') && (
-        <div className="loader-container">
-          <div className="spinner"></div>
-          <h2 style={{ marginBottom: '1rem' }}>Analysis Running</h2>
-          <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem' }}>Please keep this page open. Processing domain {jobCurrent} of {jobTotal}...</p>
-          <div className="progress-bar-bg">
-            <div className="progress-bar-fill" style={{ width: `${jobProgress}%` }}></div>
+    <div className="app-layout">
+      {/* Main Panel (Left 2/3) */}
+      <main className="main-panel">
+        <h1>Leximeter</h1>
+        <p className="subtitle">Linguistic Assessment & Discovery Tool</p>
+        
+        {errorMsg && (
+          <div className="error-banner">
+            {errorMsg}
           </div>
-        </div>
-      )}
+        )}
 
-      {jobStatus === 'complete' && (
-        <div className="state-complete">
-          <div className="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>Domain Name</th>
-                  <th>Status</th>
-                  <th>Language Count</th>
-                  <th>Languages</th>
-                  <th>Review Recommended</th>
-                </tr>
-              </thead>
-              <tbody>
-                {results.map((row, idx) => (
-                  <tr key={idx}>
-                    <td>{row.domain}</td>
-                    <td>{row.status}</td>
-                    <td>{row.languageCount}</td>
-                    <td>{row.languages}</td>
-                    <td>
-                      <span className={`badge ${row.reviewRecommended === 'Yes' ? 'badge-warning' : 'badge-success'}`}>
-                        {row.reviewRecommended}
-                      </span>
-                    </td>
+        {jobStatus === 'idle' && (
+          <div className="state-ready">
+            <h3>Enter Domains</h3>
+            <p style={{color: 'var(--text-muted)'}}>Provide one fully qualified domain per line.</p>
+            <textarea 
+              placeholder="example.edu&#10;nature.org&#10;fifa.com"
+              value={domainsInput}
+              onChange={(e) => setDomainsInput(e.target.value)}
+            />
+            <button className="btn" onClick={handleStartAnalysis}>Commence Analysis</button>
+          </div>
+        )}
+
+        {(jobStatus === 'queued' || jobStatus === 'running') && (
+          <div className="loader-container">
+            <div className="spinner"></div>
+            <h2>Analysis in Progress</h2>
+            <p>Please keep this page open. Processing domain {jobCurrent} of {jobTotal}...</p>
+            <div className="progress-bar-bg">
+              <div className="progress-bar-fill" style={{ width: `${jobProgress}%` }}></div>
+            </div>
+          </div>
+        )}
+
+        {jobStatus === 'complete' && (
+          <div className="state-complete">
+            <h2>Assessment Results</h2>
+            <div className="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Domain Name</th>
+                    <th>Status</th>
+                    <th>Language Count</th>
+                    <th>Languages</th>
+                    <th>Review Recommended</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {results.map((row, idx) => (
+                    <tr key={idx}>
+                      <td>{row.domain}</td>
+                      <td>{row.status}</td>
+                      <td>{row.languageCount}</td>
+                      <td>{row.languages}</td>
+                      <td>
+                        <span className={`badge ${row.reviewRecommended === 'Yes' ? 'badge-warning' : 'badge-success'}`}>
+                          {row.reviewRecommended}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <button className="btn" onClick={downloadCSV}>Export to CSV</button>
+            <button className="btn btn-secondary" onClick={handleReset}>New Analysis</button>
           </div>
-          <button className="btn" onClick={downloadCSV}>Download CSV</button>
-          <button className="btn btn-secondary" onClick={handleReset}>Analyze New Domains</button>
+        )}
+      </main>
+
+      {/* Side Panel (Right 1/3) */}
+      <aside className="side-panel">
+        <h2>About Leximeter</h2>
+        <div className="side-panel-content">
+          <p>
+            Leximeter is an advanced web diagnostic tool designed for web professionals and SEO specialists to determine the linguistic footprint of a given domain ecosystem.
+          </p>
+          
+          <h3>Instructions</h3>
+          <ul>
+            <li>Paste a list of root domains into the input field.</li>
+            <li>Do not include URL paths (e.g., use <code>nature.org</code> instead of <code>nature.org/es-us</code>).</li>
+            <li>Click <strong>Commence Analysis</strong> to begin the diagnostic crawl.</li>
+          </ul>
+
+          <h3>Methodology</h3>
+          <p>
+            Leximeter utilizes a headless browsing engine to completely render complex Client-Side applications. It performs a breadth-first search of up to five localized branches to identify <code>hreflang</code> declarations and <code>html lang</code> attributes.
+          </p>
+
+          <div className="copyright">
+            &copy; {new Date().getFullYear()} Leximeter Diagnostics. All rights reserved. Built for professional SEO auditing.
+          </div>
         </div>
-      )}
+      </aside>
     </div>
   );
 }

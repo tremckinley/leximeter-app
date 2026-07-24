@@ -1,0 +1,30 @@
+{
+  "name": "language-finder",
+  "version": "1.0.0",
+  "description": "The repository now supports a Vercel-style job flow for self-service analysis while keeping the existing GitHub Actions workflow and summary generation intact.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "install:all": "npm install && npm install --prefix server && npm install --prefix client",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tremckinley/language-finder.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/tremckinley/language-finder/issues"
+  },
+  "homepage": "https://github.com/tremckinley/language-finder#readme",
+  "dependencies": {
+    "concurrently": "^10.0.3"
+  }
+}

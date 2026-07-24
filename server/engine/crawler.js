@@ -9,6 +9,8 @@ async function processDomains(jobId, domains) {
 
   job.status = 'running';
   job.progress = 0;
+  job.total = domains.length;
+  job.current = 1;
   jobStore.set(jobId, job);
   
   let browser = null;
@@ -26,6 +28,9 @@ async function processDomains(jobId, domains) {
   
   const results = [];
   for (let i = 0; i < domains.length; i++) {
+    job.current = i + 1;
+    jobStore.set(jobId, job);
+
     const domain = domains[i];
     const report = await analyzeDomain(domain, browser);
     results.push(report);

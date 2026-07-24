@@ -6,6 +6,8 @@ function App() {
   const [jobId, setJobId] = useState(null);
   const [jobStatus, setJobStatus] = useState('idle'); // idle, queued, running, complete, error
   const [jobProgress, setJobProgress] = useState(0);
+  const [jobCurrent, setJobCurrent] = useState(0);
+  const [jobTotal, setJobTotal] = useState(0);
   const [results, setResults] = useState([]);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -20,6 +22,8 @@ function App() {
           if (res.ok) {
             setJobStatus(data.status);
             setJobProgress(data.progress || 0);
+            setJobCurrent(data.current || 0);
+            setJobTotal(data.total || 0);
             
             if (data.status === 'complete') {
               fetchResults();
@@ -89,6 +93,8 @@ function App() {
     setJobId(null);
     setJobStatus('idle');
     setJobProgress(0);
+    setJobCurrent(0);
+    setJobTotal(0);
     setResults([]);
     setErrorMsg('');
   };
@@ -147,7 +153,7 @@ function App() {
         <div className="loader-container">
           <div className="spinner"></div>
           <h2 style={{ marginBottom: '1rem' }}>Analysis Running</h2>
-          <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem' }}>Please keep this page open. Processing domain {Math.min(jobProgress, 99)}%...</p>
+          <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem' }}>Please keep this page open. Processing domain {jobCurrent} of {jobTotal}...</p>
           <div className="progress-bar-bg">
             <div className="progress-bar-fill" style={{ width: `${jobProgress}%` }}></div>
           </div>

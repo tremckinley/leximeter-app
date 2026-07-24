@@ -34,7 +34,9 @@ router.get('/jobs/:id', (req, res) => {
   }
   res.json({
     status: job.status,
-    progress: job.progress
+    progress: job.progress,
+    current: job.current || 0,
+    total: job.total || 0
   });
 });
 

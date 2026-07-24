@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import './index.css';
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
 function App() {
   const [domainsInput, setDomainsInput] = useState('');
   const [jobId, setJobId] = useState(null);
@@ -17,7 +19,7 @@ function App() {
     if (jobStatus === 'queued' || jobStatus === 'running') {
       interval = setInterval(async () => {
         try {
-          const res = await fetch(`http://localhost:3001/api/jobs/${jobId}`);
+          const res = await fetch(`${API_BASE}/api/jobs/${jobId}`);
           const data = await res.json();
           if (res.ok) {
             setJobStatus(data.status);
@@ -42,7 +44,7 @@ function App() {
 
   const fetchResults = async () => {
     try {
-      const res = await fetch(`http://localhost:3001/api/jobs/${jobId}/results`);
+      const res = await fetch(`${API_BASE}/api/jobs/${jobId}/results`);
       const data = await res.json();
       if (res.ok) {
         setResults(data);
@@ -68,7 +70,7 @@ function App() {
     }
 
     try {
-      const res = await fetch('http://localhost:3001/api/jobs', {
+      const res = await fetch(`${API_BASE}/api/jobs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ domains })

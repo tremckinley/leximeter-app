@@ -32,6 +32,7 @@ async function analyzeDomain(domainStr) {
   let visited = new Set();
   let queue = [`https://${domain}`];
   let maxPages = 5;
+  let domainStatus = null;
 
   const fullNameToCode = {
     'spanish': 'es', 'french': 'fr', 'german': 'de', 'italian': 'it',
@@ -39,6 +40,19 @@ async function analyzeDomain(domainStr) {
     'russian': 'ru', 'arabic': 'ar', 'hindi': 'hi', 'dutch': 'nl',
     'swedish': 'sv', 'danish': 'da', 'finnish': 'fi', 'norwegian': 'no',
     'polish': 'pl', 'turkish': 'tr', 'english': 'en'
+  };
+
+  const browserHeaders = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+    'Sec-Ch-Ua-Mobile': '?0',
+    'Sec-Ch-Ua-Platform': '"Windows"',
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    'Sec-Fetch-Site': 'none',
+    'Upgrade-Insecure-Requests': '1'
   };
 
   while (queue.length > 0 && visited.size < maxPages) {
@@ -49,9 +63,13 @@ async function analyzeDomain(domainStr) {
     try {
       const response = await axios.get(url, { 
         timeout: 5000,
-        headers: { 'User-Agent': 'LanguageFinderBot/1.0' },
+        headers: browserHeaders,
         maxRedirects: 5
       });
+      
+      if (!domainStatus) {
+         domainStatus = response.status;
+      }
       
       const $ = cheerio.load(response.data);
       
@@ -104,12 +122,15 @@ async function analyzeDomain(domainStr) {
           queue.push(`http://${domain}`);
           visited.delete(url);
        } else {
+          if (!domainStatus) {
+             domainStatus = error.response ? error.response.status : (error.code === 'ECONNABORTED' ? 408 : 500);
+          }
           console.error(`Failed to fetch ${url}:`, error.message);
        }
     }
   }
 
-  return aggregate(domain, Array.from(hreflangs));
+  return aggregate(domain, Array.from(hreflangs), domainStatus || 500);
 }
 
 module.exports = { processDomains, analyzeDomain };

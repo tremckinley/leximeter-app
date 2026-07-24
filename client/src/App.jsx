@@ -96,12 +96,13 @@ function App() {
   const downloadCSV = () => {
     if (results.length === 0) return;
     
-    const headers = ['Domain Name', 'Language Count', 'Languages', 'Review Recommended'];
+    const headers = ['Domain Name', 'Status', 'Language Count', 'Languages', 'Review Recommended'];
     const csvRows = [headers.join(',')];
     
     for (const r of results) {
       csvRows.push([
         r.domain,
+        `"${r.status || '-'}"`,
         r.languageCount,
         `"${r.languages}"`,
         r.reviewRecommended
@@ -160,6 +161,7 @@ function App() {
               <thead>
                 <tr>
                   <th>Domain Name</th>
+                  <th>Status</th>
                   <th>Language Count</th>
                   <th>Languages</th>
                   <th>Review Recommended</th>
@@ -169,6 +171,7 @@ function App() {
                 {results.map((row, idx) => (
                   <tr key={idx}>
                     <td>{row.domain}</td>
+                    <td>{row.status}</td>
                     <td>{row.languageCount}</td>
                     <td>{row.languages}</td>
                     <td>

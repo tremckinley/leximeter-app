@@ -1,5 +1,4 @@
-const puppeteer = require('puppeteer-core');
-const chromium = require('@sparticuz/chromium');
+const { chromium } = require('playwright');
 const cheerio = require('cheerio');
 const jobStore = require('../services/jobStore');
 const aggregate = require('./aggregator');
@@ -16,15 +15,17 @@ async function processDomains(jobId, domains) {
   
   let browser = null;
   try {
-    browser = await puppeteer.launch({
-      args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
-      ignoreHTTPSErrors: true,
+    browser = await chromium.launch({
+      headless: true,
+      args: [
+        '--disable-dev-shm-usage',
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-gpu'
+      ]
     });
   } catch(e) {
-    console.error("Failed to launch puppeteer", e);
+    console.error("Failed to launch playwright", e);
     job.status = 'error';
     jobStore.set(jobId, job);
     return;
@@ -72,9 +73,12 @@ async function analyzeDomain(domainStr, browser) {
 
   let page;
   try {
-    page = await browser.newPage();
-    await page.setExtraHTTPHeaders({ 'Accept-Language': 'en-US,en;q=0.9' });
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+    const context = await browser.newContext({
+      extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' },
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      ignoreHTTPSErrors: true
+    });
+    page = await context.newPage();
   } catch (e) {
     return aggregate(domain, [], 500);
   }
@@ -87,7 +91,7 @@ async function analyzeDomain(domainStr, browser) {
     try {
       let response = null;
       try {
-        response = await page.goto(url, { waitUntil: 'networkidle2', timeout: 15000 });
+        response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
       } catch (timeoutErr) {
         console.warn(`[Warn] timeout or error navigating to ${url}, attempting to extract content anyway.`);
       }

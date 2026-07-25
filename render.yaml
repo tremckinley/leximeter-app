@@ -4,10 +4,10 @@ services:
     plan: free
     env: node
     rootDir: server
-    buildCommand: npm install
+    buildCommand: bash ./render-build.sh
     startCommand: npm start
     envVars:
       - key: PORT
         value: 10000
-      - key: PUPPETEER_CACHE_DIR
+      - key: PLAYWRIGHT_BROWSERS_PATH
         value: /opt/render/project/src/.cache

@@ -1,4 +1,5 @@
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-core');
+const chromium = require('@sparticuz/chromium');
 const cheerio = require('cheerio');
 const jobStore = require('../services/jobStore');
 const aggregate = require('./aggregator');
@@ -16,8 +17,11 @@ async function processDomains(jobId, domains) {
   let browser = null;
   try {
     browser = await puppeteer.launch({
-      headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
+      ignoreHTTPSErrors: true,
     });
   } catch(e) {
     console.error("Failed to launch puppeteer", e);

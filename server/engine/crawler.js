@@ -91,7 +91,9 @@ async function analyzeDomain(domainStr, browser) {
     try {
       let response = null;
       try {
-        response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+        response = await page.goto(url, { waitUntil: 'load', timeout: 30000 });
+        // Give SPAs time to execute JavaScript and inject dynamic links
+        await page.waitForTimeout(3000).catch(() => {});
       } catch (timeoutErr) {
         console.warn(`[Warn] timeout or error navigating to ${url}, attempting to extract content anyway.`);
       }

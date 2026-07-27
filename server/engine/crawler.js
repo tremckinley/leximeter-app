@@ -79,6 +79,16 @@ async function analyzeDomain(domainStr, browser) {
       ignoreHTTPSErrors: true
     });
     page = await context.newPage();
+
+    // Block unnecessary resources to drastically speed up page load and prevent timeouts
+    await page.route('**/*', (route) => {
+      const type = route.request().resourceType();
+      if (['image', 'media', 'font', 'stylesheet'].includes(type)) {
+        route.abort();
+      } else {
+        route.continue();
+      }
+    });
   } catch (e) {
     return aggregate(domain, [], 500);
   }
@@ -91,9 +101,9 @@ async function analyzeDomain(domainStr, browser) {
     try {
       let response = null;
       try {
-        response = await page.goto(url, { waitUntil: 'load', timeout: 30000 });
+        response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
         // Give SPAs time to execute JavaScript and inject dynamic links
-        await page.waitForTimeout(3000).catch(() => {});
+        await page.waitForTimeout(5000).catch(() => {});
       } catch (timeoutErr) {
         console.warn(`[Warn] timeout or error navigating to ${url}, attempting to extract content anyway.`);
       }

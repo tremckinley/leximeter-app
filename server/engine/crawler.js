@@ -56,6 +56,7 @@ async function processDomains(jobId, domains) {
 
 async function analyzeDomain(domainStr, browser) {
   let domain = domainStr.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+  console.log(`[Crawler] Starting analysis for domain: ${domain}`);
   
   let hreflangs = new Set();
   let visited = new Set();
@@ -84,7 +85,7 @@ async function analyzeDomain(domainStr, browser) {
     // Block unnecessary resources to drastically speed up page load and prevent timeouts
     await page.route('**/*', (route) => {
       const type = route.request().resourceType();
-      if (['image', 'media', 'font', 'stylesheet'].includes(type)) {
+      if (['image', 'media', 'font'].includes(type)) {
         route.abort();
       } else {
         route.continue();
@@ -98,6 +99,7 @@ async function analyzeDomain(domainStr, browser) {
     let url = queue.shift();
     if (visited.has(url)) continue;
     visited.add(url);
+    console.log(`[Crawler] [${domain}] Visiting (${visited.size}/${maxPages}): ${url}`);
     
     try {
       let response = null;
@@ -143,7 +145,7 @@ async function analyzeDomain(domainStr, browser) {
           let path = parsed.pathname.toLowerCase();
           
           let match = path.match(/^\/([a-z]{2})(?:[-_][a-z]{2})?(?:\/|$)/);
-          if (match) {
+          if (match && Object.values(fullNameToCode).includes(match[1])) {
             hreflangs.add(match[1]);
           }
           
@@ -177,11 +179,69 @@ async function analyzeDomain(domainStr, browser) {
 
   await page.close().catch(() => {});
 
+  if (hreflangs.size <= 1 && !domainHasError) {
+    const commonCodes = ['es', 'fr', 'de', 'pt', 'zh', 'ar', 'ru', 'ja'];
+    console.log(`[Crawler] [${domain}] Initiating brute-force language discovery...`);
+    
+    let templatePaths = new Set(['/', '/home']);
+    for (const url of visited) {
+      try {
+        const parsed = new URL(url);
+        const match = parsed.pathname.match(/^\/[a-z]{2}(?:[-_][a-z]{2})?(?:\/|$)/i);
+        if (match) {
+          let p = parsed.pathname.substring(match[0].length > 1 ? match[0].length - 1 : 0);
+          if (!p.startsWith('/')) p = '/' + p;
+          templatePaths.add(p);
+          if (templatePaths.size >= 3) break;
+        }
+      } catch (e) {}
+    }
+
+    const checkPromises = [];
+    for (const code of commonCodes) {
+      if (hreflangs.has(code)) continue;
+      checkPromises.push((async () => {
+        let found = false;
+        for (const p of templatePaths) {
+          if (found) break;
+          try {
+            const langPage = await context.newPage();
+            await langPage.route('**/*', (route) => {
+              const type = route.request().resourceType();
+              if (['image', 'media', 'font'].includes(type)) {
+                route.abort();
+              } else {
+                route.continue();
+              }
+            });
+            
+            const checkUrl = `https://${domain}/${code}${p}`;
+            await langPage.goto(checkUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
+            
+            // Wait up to 5 seconds for the SPA to update the lang attribute
+            try {
+              await langPage.waitForFunction(`document.documentElement.lang && document.documentElement.lang.toLowerCase().startsWith('${code}')`, { timeout: 5000 });
+              hreflangs.add(code);
+              console.log(`[Crawler] [${domain}] Brute-force found language: ${code} at ${p}`);
+              found = true;
+            } catch (timeoutErr) {
+              // Not found within timeout
+            }
+            
+            await langPage.close().catch(() => {});
+          } catch (err) {}
+        }
+      })());
+    }
+    await Promise.allSettled(checkPromises);
+  }
+
   let finalStatusStr = domainStatus || (visited.size > 0 ? 200 : 500);
   if (domainHasError) {
     finalStatusStr = 'Error';
   }
 
+  console.log(`[Crawler] [${domain}] Finished. Languages found: ${hreflangs.size > 0 ? Array.from(hreflangs).join(', ') : 'None'}. Status: ${finalStatusStr}`);
   return aggregate(domain, Array.from(hreflangs), finalStatusStr, domainHasError);
 }
 

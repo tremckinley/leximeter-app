@@ -62,6 +62,7 @@ async function analyzeDomain(domainStr, browser) {
   let queue = [`https://${domain}`];
   let maxPages = 5;
   let domainStatus = null;
+  let domainHasError = false;
 
   const fullNameToCode = {
     'spanish': 'es', 'french': 'fr', 'german': 'de', 'italian': 'it',
@@ -105,6 +106,7 @@ async function analyzeDomain(domainStr, browser) {
         // Give SPAs time to execute JavaScript and inject dynamic links
         await page.waitForTimeout(5000).catch(() => {});
       } catch (timeoutErr) {
+        domainHasError = true;
         console.warn(`[Warn] timeout or error navigating to ${url}, attempting to extract content anyway.`);
       }
       
@@ -160,6 +162,7 @@ async function analyzeDomain(domainStr, browser) {
       });
 
     } catch (error) {
+       domainHasError = true;
        if (visited.size === 1 && url.startsWith('https://')) {
           queue.push(`http://${domain}`);
           visited.delete(url);
@@ -174,7 +177,12 @@ async function analyzeDomain(domainStr, browser) {
 
   await page.close().catch(() => {});
 
-  return aggregate(domain, Array.from(hreflangs), domainStatus || (visited.size > 0 ? 200 : 500));
+  let finalStatusStr = domainStatus || (visited.size > 0 ? 200 : 500);
+  if (domainHasError) {
+    finalStatusStr = 'Error';
+  }
+
+  return aggregate(domain, Array.from(hreflangs), finalStatusStr, domainHasError);
 }
 
 module.exports = { processDomains, analyzeDomain };

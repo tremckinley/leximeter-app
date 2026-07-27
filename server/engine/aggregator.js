@@ -40,18 +40,25 @@ function getStatusDescription(code) {
   return descriptions[code] || 'Error';
 }
 
-function aggregate(domain, languageCodes, statusCode) {
+function aggregate(domain, languageCodes, statusCode, hasError = false) {
   const validCodes = languageCodes.filter(c => c && c.length >= 2);
   const languageNamesList = validCodes.map(code => languageNames[code] || code.toUpperCase());
   
   const uniqueNames = [...new Set(languageNamesList)].sort();
   
+  let finalStatus = '';
+  if (typeof statusCode === 'string' && isNaN(Number(statusCode))) {
+    finalStatus = statusCode;
+  } else {
+    finalStatus = `${statusCode} - ${getStatusDescription(Number(statusCode))}`;
+  }
+  
   return {
     domain: domain,
-    status: `${statusCode} - ${getStatusDescription(statusCode)}`,
+    status: finalStatus,
     languageCount: uniqueNames.length,
     languages: uniqueNames.join('; ') || '-',
-    reviewRecommended: uniqueNames.length === 0 ? 'Yes' : 'No'
+    reviewRecommended: (uniqueNames.length === 0 || hasError) ? 'Yes' : 'No'
   };
 }
 

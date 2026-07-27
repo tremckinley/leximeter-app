@@ -136,7 +136,7 @@ function App() {
       {/* Main Panel (Left 2/3) */}
       <main className="main-panel">
         <h1>Leximeter</h1>
-        <p className="subtitle">Linguistic Assessment & Discovery Tool</p>
+        <p className="subtitle">Discover the languages a domain contains</p>
         
         {errorMsg && (
           <div className="error-banner">
@@ -149,11 +149,12 @@ function App() {
             <h3>Enter Domains</h3>
             <p style={{color: 'var(--text-muted)'}}>Provide one fully qualified domain per line.</p>
             <textarea 
-              placeholder="example.edu&#10;nature.org&#10;fifa.com"
+              placeholder="water.org&#10;stanford.edu&#10;fifa.com"
               value={domainsInput}
               onChange={(e) => setDomainsInput(e.target.value)}
             />
-            <button className="btn" onClick={handleStartAnalysis}>Commence Analysis</button>
+            <button className="btn" onClick={handleStartAnalysis}>Start Analysis</button>
+            <p style={{fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', marginTop: '1em', color: 'var(--text-muted)', fontStyle: 'italic'}}>Analyses are not saved when you leave or refresh the page. <strong style={{color: 'var(--primary)'}}>Click "Export to CSV"</strong> to save your results.</p>
           </div>
         )}
 
@@ -201,6 +202,7 @@ function App() {
             </div>
             <button className="btn" onClick={downloadCSV}>Export to CSV</button>
             <button className="btn btn-secondary" onClick={handleReset}>New Analysis</button>
+            <p style={{fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', marginTop: '1em', color: 'var(--text-muted)', fontStyle: 'italic'}}>Analyses are not saved when you leave or refresh the page. <strong style={{color: 'var(--primary)'}}>Click "Export to CSV"</strong> to save your results.</p>
           </div>
         )}
       </main>
@@ -210,24 +212,25 @@ function App() {
         <h2>About Leximeter</h2>
         <div className="side-panel-content">
           <p>
-            Leximeter is an advanced web diagnostic tool designed for web professionals and SEO specialists to determine the linguistic footprint of a given domain ecosystem.
+            Leximeter is a web diagnostic tool designed to determine the languages present across a given domain for SEO and Web Accessibility purposes.
           </p>
           
           <h3>Instructions</h3>
           <ul>
-            <li>Paste a list of root domains into the input field.</li>
-            <li>Do not include URL paths (e.g., use <code>nature.org</code> instead of <code>nature.org/es-us</code>).</li>
-            <li>Click <strong>Commence Analysis</strong> to begin the diagnostic crawl.</li>
+            <li>Paste or type a list of root domains into the input field.</li>
+            <li>Do not include URL paths (e.g., use <code>water.org</code> instead of <code>water.org/es-us</code>).</li>
+            <li>Click <strong>Start Analysis</strong> to begin the diagnostic crawl.</li>
           </ul>
 
           <h3>Methodology</h3>
           <p>
-            Leximeter utilizes a headless browsing engine to completely render complex Client-Side applications. It performs a breadth-first search of up to five localized branches to identify <code>hreflang</code> declarations and <code>html lang</code> attributes.
+            Leximeter performs a breadth-first search of up to five pages per domain, waiting for framework hydration only when a Single Page Application (SPA) is detected. It identifies languages by extracting <code>html lang</code> attributes, <code>hreflang</code> declarations, and analyzing URL paths.<br/><br/><strong>Note</strong>: If a SPA is detected and returns 1 or fewer languages, the domain is automatically flagged for manual review.
           </p>
 
           <div className="copyright">
-            &copy; {new Date().getFullYear()} Leximeter Diagnostics. All rights reserved. Built for professional SEO auditing.
+            Built and maintained by <a href="https://github.com/tremckinley" target="_blank" rel="noopener noreferrer">Tremaine McKinley</a>
           </div>
+          
         </div>
       </aside>
     </div>

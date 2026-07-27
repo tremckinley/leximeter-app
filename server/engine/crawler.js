@@ -87,7 +87,7 @@ async function analyzeDomain(domainStr, browser) {
     // Block unnecessary resources to drastically speed up page load and prevent timeouts
     await page.route('**/*', (route) => {
       const type = route.request().resourceType();
-      if (['image', 'media', 'font'].includes(type)) {
+      if (['image', 'media', 'font', 'stylesheet'].includes(type)) {
         route.abort();
       } else {
         route.continue();
@@ -107,8 +107,6 @@ async function analyzeDomain(domainStr, browser) {
       let response = null;
       try {
         response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
-        // Give SPAs time to execute JavaScript and inject dynamic links
-        await page.waitForTimeout(5000).catch(() => {});
       } catch (timeoutErr) {
         domainHasError = true;
         console.warn(`[Warn] timeout or error navigating to ${url}, attempting to extract content anyway.`);
@@ -118,13 +116,24 @@ async function analyzeDomain(domainStr, browser) {
          domainStatus = response.status();
       }
       
-      const html = await page.content();
-      const $ = cheerio.load(html);
+      let html = await page.content();
+      let $ = cheerio.load(html);
       
+      let currentPageIsSPA = false;
       if (!isSPA) {
         if ($('#root, #app, #__next, [data-reactroot]').length > 0 || html.includes('__NEXT_DATA__') || html.includes('__NUXT__') || html.includes('window.webpackChunk')) {
+          currentPageIsSPA = true;
           isSPA = true;
         }
+      } else {
+        currentPageIsSPA = true;
+      }
+
+      if (currentPageIsSPA) {
+        // Only wait for SPA hydration; skip this 5-second penalty for traditional SSR sites
+        await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
+        html = await page.content();
+        $ = cheerio.load(html);
       }
       
       let htmlLang = $('html').attr('lang');

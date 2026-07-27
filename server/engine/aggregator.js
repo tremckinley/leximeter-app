@@ -40,7 +40,7 @@ function getStatusDescription(code) {
   return descriptions[code] || 'Error';
 }
 
-function aggregate(domain, languageCodes, statusCode, hasError = false) {
+function aggregate(domain, languageCodes, statusCode, hasError = false, isSPA = false) {
   const validCodes = languageCodes.filter(c => c && c.length >= 2);
   const languageNamesList = validCodes.map(code => languageNames[code] || code.toUpperCase());
   
@@ -58,7 +58,7 @@ function aggregate(domain, languageCodes, statusCode, hasError = false) {
     status: finalStatus,
     languageCount: uniqueNames.length,
     languages: uniqueNames.join('; ') || '-',
-    reviewRecommended: (uniqueNames.length === 0 || hasError) ? 'Yes' : 'No'
+    reviewRecommended: (uniqueNames.length === 0 || hasError || (isSPA && uniqueNames.length <= 1)) ? 'Yes' : 'No'
   };
 }
 

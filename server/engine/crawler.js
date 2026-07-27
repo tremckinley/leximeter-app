@@ -64,6 +64,7 @@ async function analyzeDomain(domainStr, browser) {
   let maxPages = 5;
   let domainStatus = null;
   let domainHasError = false;
+  let isSPA = false;
 
   const fullNameToCode = {
     'spanish': 'es', 'french': 'fr', 'german': 'de', 'italian': 'it',
@@ -119,6 +120,12 @@ async function analyzeDomain(domainStr, browser) {
       
       const html = await page.content();
       const $ = cheerio.load(html);
+      
+      if (!isSPA) {
+        if ($('#root, #app, #__next, [data-reactroot]').length > 0 || html.includes('__NEXT_DATA__') || html.includes('__NUXT__') || html.includes('window.webpackChunk')) {
+          isSPA = true;
+        }
+      }
       
       let htmlLang = $('html').attr('lang');
       if (htmlLang) {
@@ -180,61 +187,7 @@ async function analyzeDomain(domainStr, browser) {
 
   await page.close().catch(() => {});
 
-  if (hreflangs.size <= 1 && !domainHasError) {
-    const commonCodes = ['es', 'fr', 'de', 'pt', 'zh', 'ar', 'ru', 'ja'];
-    console.log(`[Crawler] [${domain}] Initiating brute-force language discovery...`);
-    
-    let templatePaths = new Set(['/', '/home']);
-    for (const url of visited) {
-      try {
-        const parsed = new URL(url);
-        const match = parsed.pathname.match(/^\/[a-z]{2}(?:[-_][a-z]{2})?(?:\/|$)/i);
-        if (match) {
-          let p = parsed.pathname.substring(match[0].length > 1 ? match[0].length - 1 : 0);
-          if (!p.startsWith('/')) p = '/' + p;
-          templatePaths.add(p);
-          if (templatePaths.size >= 3) break;
-        }
-      } catch (e) {}
-    }
-
-    const checkCodes = commonCodes.filter(c => !hreflangs.has(c));
-    for (let i = 0; i < checkCodes.length; i += 2) {
-      const chunk = checkCodes.slice(i, i + 2);
-      await Promise.allSettled(chunk.map(async (code) => {
-        let found = false;
-        for (const p of templatePaths) {
-          if (found) break;
-          try {
-            const langPage = await context.newPage();
-            await langPage.route('**/*', (route) => {
-              const type = route.request().resourceType();
-              if (['image', 'media', 'font'].includes(type)) {
-                route.abort();
-              } else {
-                route.continue();
-              }
-            });
-            
-            const checkUrl = `https://${domain}/${code}${p}`;
-            await langPage.goto(checkUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-            
-            // Wait up to 15 seconds for the SPA to update the lang attribute on slow servers
-            try {
-              await langPage.waitForFunction(`document.documentElement.lang && document.documentElement.lang.toLowerCase().startsWith('${code}')`, { timeout: 15000 });
-              hreflangs.add(code);
-              console.log(`[Crawler] [${domain}] Brute-force found language: ${code} at ${p}`);
-              found = true;
-            } catch (timeoutErr) {
-              // Not found within timeout
-            }
-            
-            await langPage.close().catch(() => {});
-          } catch (err) {}
-        }
-      }));
-    }
-  }
+  await page.close().catch(() => {});
 
   let finalStatusStr = domainStatus || (visited.size > 0 ? 200 : 500);
   if (domainHasError) {
@@ -242,7 +195,7 @@ async function analyzeDomain(domainStr, browser) {
   }
 
   console.log(`[Crawler] [${domain}] Finished. Languages found: ${hreflangs.size > 0 ? Array.from(hreflangs).join(', ') : 'None'}. Status: ${finalStatusStr}`);
-  return aggregate(domain, Array.from(hreflangs), finalStatusStr, domainHasError);
+  return aggregate(domain, Array.from(hreflangs), finalStatusStr, domainHasError, isSPA);
 }
 
 module.exports = { processDomains, analyzeDomain };

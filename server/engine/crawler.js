@@ -74,8 +74,9 @@ async function analyzeDomain(domainStr, browser) {
   };
 
   let page;
+  let context;
   try {
-    const context = await browser.newContext({
+    context = await browser.newContext({
       extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' },
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       ignoreHTTPSErrors: true
@@ -216,11 +217,11 @@ async function analyzeDomain(domainStr, browser) {
             });
             
             const checkUrl = `https://${domain}/${code}${p}`;
-            await langPage.goto(checkUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
+            await langPage.goto(checkUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
             
-            // Wait up to 5 seconds for the SPA to update the lang attribute
+            // Wait up to 15 seconds for the SPA to update the lang attribute on slow servers
             try {
-              await langPage.waitForFunction(`document.documentElement.lang && document.documentElement.lang.toLowerCase().startsWith('${code}')`, { timeout: 5000 });
+              await langPage.waitForFunction(`document.documentElement.lang && document.documentElement.lang.toLowerCase().startsWith('${code}')`, { timeout: 15000 });
               hreflangs.add(code);
               console.log(`[Crawler] [${domain}] Brute-force found language: ${code} at ${p}`);
               found = true;

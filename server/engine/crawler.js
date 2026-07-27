@@ -198,10 +198,10 @@ async function analyzeDomain(domainStr, browser) {
       } catch (e) {}
     }
 
-    const checkPromises = [];
-    for (const code of commonCodes) {
-      if (hreflangs.has(code)) continue;
-      checkPromises.push((async () => {
+    const checkCodes = commonCodes.filter(c => !hreflangs.has(c));
+    for (let i = 0; i < checkCodes.length; i += 2) {
+      const chunk = checkCodes.slice(i, i + 2);
+      await Promise.allSettled(chunk.map(async (code) => {
         let found = false;
         for (const p of templatePaths) {
           if (found) break;
@@ -232,9 +232,8 @@ async function analyzeDomain(domainStr, browser) {
             await langPage.close().catch(() => {});
           } catch (err) {}
         }
-      })());
+      }));
     }
-    await Promise.allSettled(checkPromises);
   }
 
   let finalStatusStr = domainStatus || (visited.size > 0 ? 200 : 500);

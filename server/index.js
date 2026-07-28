@@ -8,7 +8,15 @@ const { closeBrowser } = require('./engine/crawler');
 const app = express();
 const port = process.env.PORT || 3001;
 
-// Scope CORS to the known frontend origin
+// Health check must come BEFORE the restrictive CORS middleware so any origin
+// (including the frontend) can read the response. It returns no sensitive data.
+app.get('/health', cors(), (req, res) => {
+  const origin = req.headers.origin || '(no origin)';
+  console.log(`[health] ping from ${req.ip} origin="${origin}" at ${new Date().toISOString()}`);
+  res.json({ status: 'ok' });
+});
+
+// Scope CORS to the known frontend origin for all other routes
 app.use(cors({
   origin: process.env.ALLOWED_ORIGIN || 'http://localhost:5173'
 }));
@@ -26,12 +34,6 @@ const jobLimiter = rateLimit({
 app.use('/api/jobs', jobLimiter);
 
 app.use('/api', apiRoutes);
-
-// Health check for deployment platforms (Render, etc.)
-app.get('/health', (req, res) => {
-  console.log(`[health] ping from ${req.ip} at ${new Date().toISOString()}`);
-  res.json({ status: 'ok' });
-});
 
 // Evict stale jobs from memory every 30 minutes
 const evictionInterval = setInterval(() => jobStore.evict(), 30 * 60 * 1000);

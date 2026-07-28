@@ -11,3 +11,5 @@ services:
         value: 10000
       - key: PLAYWRIGHT_BROWSERS_PATH
         value: /opt/render/project/src/.cache
+      - key: ALLOWED_ORIGIN
+        sync: false  # Set manually in the Render dashboard to your frontend URL

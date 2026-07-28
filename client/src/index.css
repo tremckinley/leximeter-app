@@ -74,6 +74,29 @@ h1 {
   margin-bottom: 0.5rem;
 }
 
+.heading-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+/* Override h1's own margin-bottom when inside the row */
+.heading-row h1 {
+  margin-bottom: 0;
+}
+
+.heading-logo {
+  height: 5rem;   /* matches h1 font-size so it feels optically balanced */
+  width: auto;
+}
+
+.center-logo {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
 h2 {
   font-family: var(--font-serif);
   font-size: 1.75rem;

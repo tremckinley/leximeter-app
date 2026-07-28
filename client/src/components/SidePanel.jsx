@@ -1,10 +1,19 @@
 /**
  * Static sidebar with About, Instructions, and Methodology content.
  */
+import logo from '../assets/logo.svg';
+import logo2 from '../assets/logo.png';
+
 export default function SidePanel() {
   return (
     <aside className="side-panel">
-      <h2>About Leximeter</h2>
+      <div className="center-logo">
+        <img src={logo2} alt="Leximeter logo" className="heading-logo" />
+        </div>
+        <div className="heading-row">
+          <h2>About</h2>
+        
+      </div>
       <div className="side-panel-content">
         <p>
           Leximeter is a web diagnostic tool designed to determine the languages present across a given domain for SEO and Web Accessibility purposes.

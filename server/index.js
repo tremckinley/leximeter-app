@@ -11,8 +11,7 @@ const port = process.env.PORT || 3001;
 // Health check must come BEFORE the restrictive CORS middleware so any origin
 // (including the frontend) can read the response. It returns no sensitive data.
 app.get('/health', cors(), (req, res) => {
-  const origin = req.headers.origin || '(no origin)';
-  console.log(`[health] ping from ${req.ip} origin="${origin}" at ${new Date().toISOString()}`);
+  console.log(`[health] ping from ${req.ip} at ${new Date().toISOString()}`);
   res.json({ status: 'ok' });
 });
 

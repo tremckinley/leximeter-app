@@ -160,7 +160,9 @@ function App() {
   return (
     <div className="app-layout">
       <main className="main-panel">
-        <h1>Leximeter</h1>
+        <div className="heading-row">
+          <h1>Leximeter</h1>
+        </div>
         <p className="subtitle">Discover the languages a domain contains</p>
 
         {errorMsg && (

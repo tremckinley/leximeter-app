@@ -28,7 +28,10 @@ app.use('/api/jobs', jobLimiter);
 app.use('/api', apiRoutes);
 
 // Health check for deployment platforms (Render, etc.)
-app.get('/health', (_, res) => res.json({ status: 'ok' }));
+app.get('/health', (req, res) => {
+  console.log(`[health] ping from ${req.ip} at ${new Date().toISOString()}`);
+  res.json({ status: 'ok' });
+});
 
 // Evict stale jobs from memory every 30 minutes
 const evictionInterval = setInterval(() => jobStore.evict(), 30 * 60 * 1000);

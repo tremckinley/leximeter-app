@@ -37,10 +37,10 @@ app.use(cors({
 
 app.use(express.json());
 
-// Rate limiting: max 10 job submissions per IP per 15 minutes
+// Rate limiting: max 20 job submissions per IP per hour
 const jobLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
+  windowMs: 60 * 60 * 1000,
+  max: 20,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests. Please try again in a few minutes.' }

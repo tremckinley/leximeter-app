@@ -15,9 +15,24 @@ app.get('/health', cors(), (req, res) => {
   res.json({ status: 'ok' });
 });
 
-// Scope CORS to the known frontend origin for all other routes
+// ALLOWED_ORIGIN may be a comma-separated list of origins, e.g.:
+//   https://www.leximeter.app,https://leximeter.app
+const allowedOrigins = (process.env.ALLOWED_ORIGIN || 'http://localhost:5173')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
+
+console.log(`[cors] allowed origins: ${allowedOrigins.join(', ')}`);
+
 app.use(cors({
-  origin: process.env.ALLOWED_ORIGIN || 'http://localhost:5173'
+  origin: (origin, callback) => {
+    // Allow requests with no Origin header (e.g. server-to-server, curl)
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS: origin "${origin}" not allowed`));
+    }
+  }
 }));
 
 app.use(express.json());

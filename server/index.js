@@ -8,6 +8,10 @@ const { closeBrowser } = require('./engine/crawler');
 const app = express();
 const port = process.env.PORT || 3001;
 
+// Trust Render's reverse proxy so req.ip reflects the real client IP
+// (used by the rate limiter — without this all requests share one bucket)
+app.set('trust proxy', 1);
+
 // Health check must come BEFORE the restrictive CORS middleware so any origin
 // (including the frontend) can read the response. It returns no sensitive data.
 app.get('/health', cors(), (req, res) => {

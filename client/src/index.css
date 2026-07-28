@@ -294,3 +294,40 @@ tr:last-child td {
   color: var(--text-muted);
   font-style: italic;
 }
+
+/* Server warm-up banner (Render free tier cold-start) */
+.warmup-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  background-color: #EFF6FF;
+  border: 1px solid #BFDBFE;
+  border-radius: 4px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.25rem;
+  font-size: 0.9rem;
+  color: #1E40AF;
+  line-height: 1.5;
+}
+
+.warmup-dot {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #3B82F6;
+  margin-top: 0.35rem;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.75); }
+}
+
+/* Disabled state for the submit button during warm-up */
+.btn:disabled {
+  background-color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.7;
+}

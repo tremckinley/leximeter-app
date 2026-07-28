@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useJobPoller } from './hooks/useJobPoller';
 import DomainInput from './components/DomainInput';
 import ProgressView from './components/ProgressView';
@@ -17,6 +17,39 @@ function App() {
   const [jobTotal, setJobTotal] = useState(0);
   const [results, setResults] = useState([]);
   const [errorMsg, setErrorMsg] = useState('');
+  // 'checking' = initial ping, 'warming' = cold-start in progress, 'ready' = server up
+  const [serverStatus, setServerStatus] = useState('checking');
+
+  // Ping /health on mount and retry until the server responds.
+  // Render's free tier can take up to 60 seconds to cold-start.
+  useEffect(() => {
+    let retryTimer;
+    let hasShownWarming = false;
+
+    const checkHealth = async () => {
+      try {
+        const controller = new AbortController();
+        const tid = setTimeout(() => controller.abort(), 5000);
+        const res = await fetch(`${API_BASE}/health`, { signal: controller.signal });
+        clearTimeout(tid);
+        if (res.ok) {
+          setServerStatus('ready');
+          return;
+        }
+      } catch {
+        // Timed out or connection refused — server is still warming up
+      }
+
+      if (!hasShownWarming) {
+        hasShownWarming = true;
+        setServerStatus('warming');
+      }
+      retryTimer = setTimeout(checkHealth, 4000);
+    };
+
+    checkHealth();
+    return () => clearTimeout(retryTimer);
+  }, []);
 
   // Fetches final results once the poller signals completion.
   // Wrapped in useCallback so its reference is stable for the hook's ref pattern.
@@ -139,6 +172,7 @@ function App() {
             value={domainsInput}
             onChange={setDomainsInput}
             onSubmit={handleStartAnalysis}
+            serverStatus={serverStatus}
           />
         )}
 

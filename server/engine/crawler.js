@@ -188,19 +188,29 @@ async function analyzeDomain(domainStr, b) {
         if (parsed.hostname.includes(domain)) {
           const path = parsed.pathname.toLowerCase();
 
+          // ── Strategy 1: path-prefix language code (e.g. /es/, /fr-us/)
           const match = path.match(/^\/([a-z]{2})(?:[-_][a-z]{2})?(?:\/|$)/);
           if (match && Object.values(FULL_NAME_TO_CODE).includes(match[1])) {
             hreflangs.add(match[1]);
           }
 
+          // ── Strategy 2: full language name in path (e.g. /spanish, -french)
           for (const [name, code] of Object.entries(FULL_NAME_TO_CODE)) {
             if (path.includes(`/${name}`) || path.includes(`-${name}`)) {
               hreflangs.add(code);
             }
           }
 
+          // ── Strategy 3: language-code subdomain (e.g. es.visitsanantonio.com)
+          const subdomainParts = parsed.hostname.split('.');
+          const subdomainPrefix = subdomainParts.length > 2 ? subdomainParts[0] : null;
+          const isLangSubdomain = subdomainPrefix && Object.values(FULL_NAME_TO_CODE).includes(subdomainPrefix);
+          if (isLangSubdomain) {
+            hreflangs.add(subdomainPrefix);
+          }
+
           if (!visited.has(absoluteUrl) && queue.length < QUEUE_CAP) {
-            if (match || Object.keys(FULL_NAME_TO_CODE).some(n => path.includes(n))) {
+            if (match || isLangSubdomain || Object.keys(FULL_NAME_TO_CODE).some(n => path.includes(n))) {
               queue.push(absoluteUrl);
             }
           }

@@ -16,6 +16,19 @@ const FULL_NAME_TO_CODE = {
 const MAX_PAGES = 5;
 const QUEUE_CAP = 20;
 
+// Strategy 4: canonical paths to probe via HEAD when only 1 language is found
+// Each entry: [pathToProbe, languageCode]
+const PROBE_PATHS = [
+  ...Object.entries(FULL_NAME_TO_CODE)
+    .filter(([, code]) => code !== 'en')
+    .flatMap(([name, code]) => [
+      [`/${code}`, code],
+      [`/${code}/`, code],
+      [`/${name}`, code],
+      [`/${name}/`, code],
+    ]),
+];
+
 // --- Browser singleton ---
 // Shared across jobs to avoid repeated cold-start cost.
 // Closed via closeBrowser() on graceful shutdown.
@@ -141,13 +154,16 @@ async function analyzeDomain(domainStr, b) {
       let html = await page.content();
       let $ = cheerio.load(html);
 
+      // ── Detect SPA or lazy-module patterns that need JS hydration ──────────
       let currentPageIsSPA = false;
       if (!isSPA) {
         if (
           $('#root, #app, #__next, [data-reactroot]').length > 0 ||
           html.includes('__NEXT_DATA__') ||
           html.includes('__NUXT__') ||
-          html.includes('window.webpackChunk')
+          html.includes('window.webpackChunk') ||
+          // NFL/CMS sites that lazy-load nav modules via data-require attributes
+          $('[data-require]').length > 0
         ) {
           currentPageIsSPA = true;
           isSPA = true;
@@ -156,12 +172,13 @@ async function analyzeDomain(domainStr, b) {
         currentPageIsSPA = true;
       }
 
-      if (currentPageIsSPA) {
-        // Wait for SPA hydration; skip this penalty for traditional SSR sites
-        await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
-        html = await page.content();
-        $ = cheerio.load(html);
-      }
+      // ── Always do a brief settle wait so lazy-injected content can render ──
+      // For confirmed SPA/lazy-module sites use up to 5 s; for all other pages
+      // use a short 2 s cap so we don't burn time on fast SSR sites.
+      const settleTimeout = currentPageIsSPA ? 5000 : 2000;
+      await page.waitForLoadState('networkidle', { timeout: settleTimeout }).catch(() => {});
+      html = await page.content();
+      $ = cheerio.load(html);
 
       const htmlLang = $('html').attr('lang');
       if (htmlLang) {
@@ -234,12 +251,79 @@ async function analyzeDomain(domainStr, b) {
   await page.close().catch(() => {});
   await context.close().catch(() => {});
 
+  // ── Strategy 4: Proactive HEAD probing ─────────────────────────────────────
+  // If only one language was detected so far, fire lightweight HEAD requests
+  // against canonical language paths. This catches sites whose language links
+  // are hidden behind JS navigation menus that didn't fully render in time.
+  if (hreflangs.size <= 1) {
+    console.log(`[Crawler] [${domain}] Only ${hreflangs.size} language(s) found – running proactive URL probes...`);
+    const probeResults = await probeLanguagePaths(domain, PROBE_PATHS);
+    for (const code of probeResults) {
+      hreflangs.add(code);
+    }
+    if (probeResults.size > 0) {
+      console.log(`[Crawler] [${domain}] Probing found: ${Array.from(probeResults).join(', ')}`);
+    }
+  }
+
   const finalStatusStr = domainHasError
     ? 'Error'
     : (domainStatus || (visited.size > 0 ? 200 : 500));
 
   console.log(`[Crawler] [${domain}] Finished. Languages: ${hreflangs.size > 0 ? Array.from(hreflangs).join(', ') : 'None'}. Status: ${finalStatusStr}`);
   return aggregate(domain, Array.from(hreflangs), finalStatusStr, domainHasError, isSPA);
+}
+
+// --- Strategy 4: Proactive language path prober ---
+// Fires HEAD requests against a deduplicated set of candidate language URLs.
+// Returns a Set of language codes that resolved to a 2xx or 3xx response.
+
+async function probeLanguagePaths(domain, probePaths) {
+  const found = new Set();
+
+  // Deduplicate paths so we don't fire two requests for e.g. /es and /es/
+  const seenCodes = new Set();
+  const dedupedPaths = [];
+  for (const [path, code] of probePaths) {
+    if (!seenCodes.has(`${code}:${path}`)) {
+      seenCodes.add(`${code}:${path}`);
+      dedupedPaths.push([path, code]);
+    }
+  }
+
+  const controller = new AbortController();
+  const PROBE_TIMEOUT_MS = 8000;
+  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+
+  try {
+    await Promise.allSettled(
+      dedupedPaths.map(async ([path, code]) => {
+        const url = `https://${domain}${path}`;
+        try {
+          const res = await fetch(url, {
+            method: 'HEAD',
+            redirect: 'follow',
+            signal: controller.signal,
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (compatible; LexiBot/1.0)',
+              'Accept-Language': 'en-US,en;q=0.9'
+            }
+          });
+          // Accept 2xx and 3xx – a redirect itself signals the path exists
+          if (res.status >= 200 && res.status < 400) {
+            console.log(`[Probe] [${domain}] ${url} → ${res.status} (${code})`);
+            found.add(code);
+          }
+        } catch {
+          // Network error or timeout – silently skip this path
+        }
+      })
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+
+  return found;
 }
 
 module.exports = { processDomains, analyzeDomain, closeBrowser };

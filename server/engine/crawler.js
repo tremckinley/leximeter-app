@@ -13,21 +13,22 @@ const FULL_NAME_TO_CODE = {
   'polish': 'pl', 'turkish': 'tr', 'english': 'en'
 };
 
+const LANG_CODES = new Set(Object.values(FULL_NAME_TO_CODE));
+const LANG_NAMES = Object.keys(FULL_NAME_TO_CODE);
+
 const MAX_PAGES = 5;
 const QUEUE_CAP = 20;
 
-// Strategy 4: canonical paths to probe via HEAD when only 1 language is found
+// Strategy 4: canonical paths to probe via HEAD when crawl finds no non-English language.
 // Each entry: [pathToProbe, languageCode]
-const PROBE_PATHS = [
-  ...Object.entries(FULL_NAME_TO_CODE)
-    .filter(([, code]) => code !== 'en')
-    .flatMap(([name, code]) => [
-      [`/${code}`, code],
-      [`/${code}/`, code],
-      [`/${name}`, code],
-      [`/${name}/`, code],
-    ]),
-];
+const PROBE_PATHS = Object.entries(FULL_NAME_TO_CODE)
+  .filter(([, code]) => code !== 'en')
+  .flatMap(([name, code]) => [
+    [`/${code}`, code],
+    [`/${code}/`, code],
+    [`/${name}`, code],
+    [`/${name}/`, code],
+  ]);
 
 // --- Browser singleton ---
 // Shared across jobs to avoid repeated cold-start cost.
@@ -107,6 +108,7 @@ async function analyzeDomain(domainStr, b) {
   let domainStatus = null;
   let domainHasError = false;
   let isSPA = false;
+  let hasHreflangTags = false;  // track if any hreflang <link> tags were found
 
   let page;
   let context;
@@ -136,6 +138,7 @@ async function analyzeDomain(domainStr, b) {
     const url = queue.shift();
     if (visited.has(url)) continue;
     visited.add(url);
+    const isFirstPage = visited.size === 1;
     console.log(`[Crawler] [${domain}] Visiting (${visited.size}/${MAX_PAGES}): ${url}`);
 
     try {
@@ -155,30 +158,33 @@ async function analyzeDomain(domainStr, b) {
       let $ = cheerio.load(html);
 
       // ── Detect SPA or lazy-module patterns that need JS hydration ──────────
-      let currentPageIsSPA = false;
-      if (!isSPA) {
-        if (
-          $('#root, #app, #__next, [data-reactroot]').length > 0 ||
-          html.includes('__NEXT_DATA__') ||
-          html.includes('__NUXT__') ||
-          html.includes('window.webpackChunk') ||
-          // NFL/CMS sites that lazy-load nav modules via data-require attributes
-          $('[data-require]').length > 0
-        ) {
-          currentPageIsSPA = true;
+      // Only check on the first page per domain to avoid false positives on
+      // language sub-pages that may have different structure.
+      if (isFirstPage && !isSPA) {
+        const hasReactRoot = $('#root, #app, #__next, [data-reactroot]').length > 0;
+        const hasNextData = html.includes('__NEXT_DATA__');
+        const hasNuxt = html.includes('__NUXT__');
+        const hasWebpack = html.includes('window.webpackChunk');
+        // Structural lazy-module pattern: data-require on navigation/header elements
+        const hasLazyNav = $('header[data-require], nav[data-require], [data-require*="navigation"], [data-require*="nav"]').length > 0;
+
+        if (hasReactRoot || hasNextData || hasNuxt || hasWebpack || hasLazyNav) {
           isSPA = true;
+          console.log(`[Crawler] [${domain}] Lazy/SPA pattern detected – will use settle wait.`);
         }
-      } else {
-        currentPageIsSPA = true;
       }
 
-      // ── Always do a brief settle wait so lazy-injected content can render ──
-      // For confirmed SPA/lazy-module sites use up to 5 s; for all other pages
-      // use a short 2 s cap so we don't burn time on fast SSR sites.
-      const settleTimeout = currentPageIsSPA ? 5000 : 2000;
-      await page.waitForLoadState('networkidle', { timeout: settleTimeout }).catch(() => {});
-      html = await page.content();
-      $ = cheerio.load(html);
+      // ── Settle wait: deterministic fixed delay for lazy-loaded content ──────
+      // For SPA/lazy-module sites we give a guaranteed 1500 ms for JS modules
+      // to inject navigation. Only apply on page 1 — sub-pages of the same site
+      // share the same nav and don't need the extra wait after the first load.
+      // Using a fixed delay (not networkidle) makes timing consistent across
+      // multiple domains regardless of background network traffic.
+      if (isSPA && isFirstPage) {
+        await page.waitForTimeout(1500);
+        html = await page.content();
+        $ = cheerio.load(html);
+      }
 
       const htmlLang = $('html').attr('lang');
       if (htmlLang) {
@@ -188,6 +194,7 @@ async function analyzeDomain(domainStr, b) {
       $('link[rel="alternate"][hreflang]').each((i, el) => {
         const hl = $(el).attr('hreflang');
         if (hl && hl.toLowerCase() !== 'x-default') {
+          hasHreflangTags = true;
           hreflangs.add(hl.split('-')[0].toLowerCase());
         }
       });
@@ -207,7 +214,7 @@ async function analyzeDomain(domainStr, b) {
 
           // ── Strategy 1: path-prefix language code (e.g. /es/, /fr-us/)
           const match = path.match(/^\/([a-z]{2})(?:[-_][a-z]{2})?(?:\/|$)/);
-          if (match && Object.values(FULL_NAME_TO_CODE).includes(match[1])) {
+          if (match && LANG_CODES.has(match[1])) {
             hreflangs.add(match[1]);
           }
 
@@ -221,13 +228,13 @@ async function analyzeDomain(domainStr, b) {
           // ── Strategy 3: language-code subdomain (e.g. es.visitsanantonio.com)
           const subdomainParts = parsed.hostname.split('.');
           const subdomainPrefix = subdomainParts.length > 2 ? subdomainParts[0] : null;
-          const isLangSubdomain = subdomainPrefix && Object.values(FULL_NAME_TO_CODE).includes(subdomainPrefix);
+          const isLangSubdomain = subdomainPrefix && LANG_CODES.has(subdomainPrefix);
           if (isLangSubdomain) {
             hreflangs.add(subdomainPrefix);
           }
 
           if (!visited.has(absoluteUrl) && queue.length < QUEUE_CAP) {
-            if (match || isLangSubdomain || Object.keys(FULL_NAME_TO_CODE).some(n => path.includes(n))) {
+            if (match || isLangSubdomain || LANG_NAMES.some(n => path.includes(n))) {
               queue.push(absoluteUrl);
             }
           }
@@ -247,16 +254,17 @@ async function analyzeDomain(domainStr, b) {
     }
   }
 
-  // Fix: was calling page.close() twice; context was never closed
   await page.close().catch(() => {});
   await context.close().catch(() => {});
 
   // ── Strategy 4: Proactive HEAD probing ─────────────────────────────────────
-  // If only one language was detected so far, fire lightweight HEAD requests
-  // against canonical language paths. This catches sites whose language links
-  // are hidden behind JS navigation menus that didn't fully render in time.
-  if (hreflangs.size <= 1) {
-    console.log(`[Crawler] [${domain}] Only ${hreflangs.size} language(s) found – running proactive URL probes...`);
+  // Only fire if: (a) no non-English language was found AND (b) no hreflang
+  // <link> tags were present. If a site has proper hreflang tags we trust them;
+  // if a site already showed multi-language links we don't need probing.
+  // This avoids wasting 8+ seconds on legitimately English-only sites.
+  const nonEnglishFound = Array.from(hreflangs).some(c => c !== 'en');
+  if (!nonEnglishFound && !hasHreflangTags) {
+    console.log(`[Crawler] [${domain}] No non-English languages found and no hreflang tags – running proactive URL probes...`);
     const probeResults = await probeLanguagePaths(domain, PROBE_PATHS);
     for (const code of probeResults) {
       hreflangs.add(code);
@@ -275,21 +283,20 @@ async function analyzeDomain(domainStr, b) {
 }
 
 // --- Strategy 4: Proactive language path prober ---
-// Fires HEAD requests against a deduplicated set of candidate language URLs.
+// Fires parallel HEAD requests against canonical language URL candidates.
 // Returns a Set of language codes that resolved to a 2xx or 3xx response.
 
 async function probeLanguagePaths(domain, probePaths) {
   const found = new Set();
 
-  // Deduplicate paths so we don't fire two requests for e.g. /es and /es/
-  const seenCodes = new Set();
-  const dedupedPaths = [];
-  for (const [path, code] of probePaths) {
-    if (!seenCodes.has(`${code}:${path}`)) {
-      seenCodes.add(`${code}:${path}`);
-      dedupedPaths.push([path, code]);
-    }
-  }
+  // Deduplicate paths before firing requests
+  const seen = new Set();
+  const unique = probePaths.filter(([path, code]) => {
+    const key = `${code}:${path}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 
   const controller = new AbortController();
   const PROBE_TIMEOUT_MS = 8000;
@@ -297,7 +304,7 @@ async function probeLanguagePaths(domain, probePaths) {
 
   try {
     await Promise.allSettled(
-      dedupedPaths.map(async ([path, code]) => {
+      unique.map(async ([path, code]) => {
         const url = `https://${domain}${path}`;
         try {
           const res = await fetch(url, {
@@ -315,7 +322,7 @@ async function probeLanguagePaths(domain, probePaths) {
             found.add(code);
           }
         } catch {
-          // Network error or timeout – silently skip this path
+          // Network error or timeout – silently skip
         }
       })
     );

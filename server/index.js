@@ -41,12 +41,19 @@ app.use(cors({
 
 app.use(express.json());
 
-// Rate limiting: max 20 job submissions per IP per hour
+// Rate limiting: max 200 job submissions per real client IP per hour.
+// We key on the first entry in X-Forwarded-For (the original client IP)
+// rather than req.ip, because on Render's free tier the reverse proxy
+// collapses all traffic to a single IP, causing every user to share one bucket.
 const jobLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
-  max: 20,
+  max: 200,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => {
+    const forwarded = req.headers['x-forwarded-for'];
+    return (forwarded ? forwarded.split(',')[0] : req.ip).trim();
+  },
   message: { error: 'Too many requests. Please try again in a few minutes.' }
 });
 app.use('/api/jobs', jobLimiter);

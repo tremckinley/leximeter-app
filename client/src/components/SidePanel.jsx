@@ -38,8 +38,7 @@ export default function SidePanel() {
           languages by extracting <code>html lang</code> attributes, <code>hreflang</code>{' '}
           declarations, and analyzing URL paths.
           <br /><br />
-          <span className="emphasis">Note:</span> If a SPA is detected and returns 1 or fewer
-          languages, the domain is automatically flagged for manual review.
+          <span className="emphasis">Note:</span> If a single-page application or site that has content that can't be crawled is detected, they are flagged for manual review. Leximeter does not have the capacity to interact with the browser at this stage.
         </p>
 
         <div className="copyright">
